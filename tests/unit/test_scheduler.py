@@ -10,7 +10,6 @@ import pytest
 from jobspy_v2.scheduler.cron_scheduler import CronScheduler, parse_cron
 from jobspy_v2.scheduler.health_check import start_health_check
 
-
 # ── parse_cron ──────────────────────────────────────────────────────────
 
 
@@ -176,10 +175,6 @@ class TestRunner:
         mock_sched = mock_sched_cls.return_value
 
         # Make serve return quickly by setting stop_event immediately
-        import threading
-
-        original_event_wait = threading.Event.wait
-
         def instant_set(self_event, *args, **kwargs):
             self_event.set()
             return True

@@ -38,6 +38,14 @@ jobs:
       - name: Install dependencies
         run: uv sync --no-dev
 
+      - name: Decode resume PDF from secret
+        run: echo "${{ secrets.RESUME_BASE64 }}" | base64 -d > resume.pdf
+
+      - name: Decode applicant context from secret
+        run: |
+          mkdir -p contexts
+          echo "${{ secrets.CONTEXT_BASE64 }}" | base64 -d > contexts/profile.md
+
       - name: Run onsite workflow
         run: |
           if [ "${{ github.event.inputs.dry_run }}" = "true" ]; then
@@ -63,6 +71,9 @@ jobs:
           CONTACT_LINKEDIN: ${{ secrets.CONTACT_LINKEDIN }}
           CONTACT_CODOLIO: ${{ secrets.CONTACT_CODOLIO }}
           RESUME_DRIVE_LINK: ${{ secrets.RESUME_DRIVE_LINK }}
+          # --- Files (decoded above) ---
+          RESUME_FILE_PATH: resume.pdf
+          CONTEXT_FILE_PATH: contexts/profile.md
           # --- Storage ---
           STORAGE_BACKEND: ${{ secrets.STORAGE_BACKEND }}
           GOOGLE_CREDENTIALS_JSON: ${{ secrets.GOOGLE_CREDENTIALS_JSON }}

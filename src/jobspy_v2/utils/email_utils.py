@@ -66,7 +66,7 @@ def matches_filter_pattern(email: str, pattern: str) -> bool:
 
 
 def is_filtered_email(email: str, filter_patterns: Sequence[str]) -> bool:
-    """Return True if *email* matches ANY of the filter patterns (should be rejected)."""
+    """Return True if *email* matches ANY filter pattern."""
     if not email or not filter_patterns:
         return False
     return any(matches_filter_pattern(email, p) for p in filter_patterns)

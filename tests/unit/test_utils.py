@@ -19,7 +19,6 @@ from jobspy_v2.utils.text_utils import (
     truncate_to_word_limit,
 )
 
-
 # ── email_utils: validate_email ──────────────────────────────────────────────
 
 

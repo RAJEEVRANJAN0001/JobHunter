@@ -3,9 +3,8 @@
 from __future__ import annotations
 
 import smtplib
-from datetime import date, timedelta
 from pathlib import Path
-from unittest.mock import MagicMock, Mock, patch, call
+from unittest.mock import MagicMock, Mock, patch
 
 import pandas as pd
 import pytest
@@ -22,7 +21,6 @@ from jobspy_v2.core.scraper import (
     scrape_jobs,
 )
 from jobspy_v2.storage.csv_backend import CsvBackend
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
@@ -327,9 +325,14 @@ class TestEmailGenerator:
         mock_openai_cls.return_value = mock_client
         mock_response = MagicMock()
         mock_response.choices = [MagicMock()]
-        mock_response.choices[
-            0
-        ].message.content = "SUBJECT: ML Role Application\n\nI am writing to express my interest in the ML Engineer position at TechCo. I have extensive experience building machine learning systems and deploying them to production. My background includes deep learning, NLP, and computer vision applications."
+        mock_response.choices[0].message.content = (
+            "SUBJECT: ML Role Application\n\n"
+            "I am writing to express my interest in the ML Engineer "
+            "position at TechCo. I have extensive experience building "
+            "machine learning systems and deploying them to production. "
+            "My background includes deep learning, NLP, and computer "
+            "vision applications."
+        )
         mock_client.chat.completions.create.return_value = mock_response
 
         result = generate_email(
@@ -349,7 +352,10 @@ class TestEmailGenerator:
         settings.openrouter_api_key = "test-key"
         settings.min_email_words = 5
         settings.fallback_email_subject = "Fallback Subject"
-        settings.fallback_email_body = "Fallback body with enough words to pass the minimum word count requirement for the email generator."
+        settings.fallback_email_body = (
+            "Fallback body with enough words to pass the minimum"
+            " word count requirement for the email generator."
+        )
 
         ctx = tmp_path / "profile.md"
         ctx.write_text("Developer profile")

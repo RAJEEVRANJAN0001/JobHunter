@@ -11,17 +11,14 @@ from typing import TYPE_CHECKING
 from openai import OpenAI
 
 from jobspy_v2.config.defaults import (
-    COMMON_STOP_WORDS,
     CONTACT_INFO_FOOTER,
     CONTACT_INFO_FOOTER_WITH_RESUME,
-    DEFAULT_CLOSING,
     LLM_CLEANUP_PATTERNS,
     OPENROUTER_EMAIL_PROMPT,
 )
 from jobspy_v2.utils.text_utils import (
     clean_whitespace,
     count_words,
-    extract_keywords,
     strip_html_markdown,
     truncate_to_word_limit,
 )
@@ -94,14 +91,6 @@ def _generate_with_llm(
     """Generate email via OpenRouter LLM."""
     # Use pre-loaded context if provided, otherwise load from file
     context_text = context if context else _load_context(settings.context_file_path)
-
-    # Extract keywords from job description
-    keywords = extract_keywords(
-        job_description,
-        stop_words=COMMON_STOP_WORDS,
-        top_n=15,
-    )
-    keyword_hint = ", ".join(keywords) if keywords else "general software role"
 
     # Build prompt
     prompt = OPENROUTER_EMAIL_PROMPT.format(

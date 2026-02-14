@@ -16,7 +16,6 @@ from jobspy_v2.storage.base import (
 )
 from jobspy_v2.storage.csv_backend import CsvBackend
 
-
 # ---------------------------------------------------------------------------
 # Column schema tests
 # ---------------------------------------------------------------------------

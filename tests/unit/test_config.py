@@ -16,7 +16,6 @@ from jobspy_v2.config.defaults import (
 )
 from jobspy_v2.config.settings import Settings, get_settings
 
-
 # ===================================================================
 # defaults.py
 # ===================================================================

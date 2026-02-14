@@ -4,7 +4,6 @@ from __future__ import annotations
 
 from typing import Protocol
 
-
 # Column definitions for each data table
 SENT_EMAIL_COLUMNS: tuple[str, ...] = (
     "email",

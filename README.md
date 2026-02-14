@@ -219,12 +219,72 @@ To enable the scraper workflows:
 
 1. Push the repo to GitHub
 2. Go to **Settings > Secrets and variables > Actions**
-3. Add all required environment variables as repository secrets (see
-   `.env.example` for the full list)
-4. Upload your resume PDF as a secret or use a base64-encoded secret
-5. The cron jobs will run automatically at the configured times
+3. Add the required secrets listed below
+4. The cron jobs will run automatically at the configured times
 
 The test workflow runs automatically on every push and pull request to `main`.
+
+#### Required Secrets
+
+Add these as **repository secrets** in your GitHub repo settings. Every variable
+from `.env.example` needs a corresponding secret. The table below covers the
+most important ones:
+
+| Secret Name | How to Get It |
+|-------------|---------------|
+| `GMAIL_EMAIL` | Your Gmail address |
+| `GMAIL_APP_PASSWORD` | Generate at https://myaccount.google.com/apppasswords |
+| `OPENROUTER_API_KEY` | Get from https://openrouter.ai/keys |
+| `GOOGLE_CREDENTIALS_JSON` | Base64-encoded service account JSON (see below) |
+| `GOOGLE_SHEET_NAME` | Name of your Google Sheets spreadsheet |
+| `RESUME_BASE64` | Base64-encoded resume PDF (see below) |
+| `CONTEXT_BASE64` | Base64-encoded applicant profile markdown (see below) |
+| `REPORT_EMAIL` | Email address for run summary reports |
+| `CONTACT_NAME` | Your full name |
+| `CONTACT_EMAIL` | Your contact email |
+| `CONTACT_PHONE` | Your phone number |
+| `CONTACT_PORTFOLIO` | Your portfolio URL |
+| `CONTACT_GITHUB` | Your GitHub username |
+
+See `.env.example` for the complete list of all supported variables (search
+terms, job boards, filtering patterns, scheduling, etc.).
+
+#### Encoding Files as Secrets
+
+Your resume, applicant profile, and Google credentials cannot be committed to
+git. Instead, base64-encode them and store as GitHub secrets. The workflows
+automatically decode these at runtime.
+
+**Resume (PDF):**
+
+```bash
+# Linux/macOS
+base64 -w 0 YourResume.pdf
+# Copy the output and paste it as the RESUME_BASE64 secret
+```
+
+**Applicant profile (Markdown):**
+
+```bash
+# This is the profile context used by the LLM to personalize emails
+base64 -w 0 contexts/profile.md
+# Copy the output and paste it as the CONTEXT_BASE64 secret
+```
+
+**Google service account credentials (JSON):**
+
+```bash
+base64 -w 0 credentials.json
+# Copy the output and paste it as the GOOGLE_CREDENTIALS_JSON secret
+```
+
+The workflows decode these secrets into files before running the scraper:
+
+- `RESUME_BASE64` is decoded to `resume.pdf` in the project root
+- `CONTEXT_BASE64` is decoded to `contexts/profile.md`
+
+Both paths match the default values in `.env.example`, so no additional
+configuration is needed.
 
 ### Local Cron
 
