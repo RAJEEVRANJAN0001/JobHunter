@@ -112,7 +112,7 @@ class Settings(BaseSettings):
     onsite_job_boards: CsvList = Field(default_factory=list)
     onsite_country_indeed: str = "India"
     onsite_results_wanted: int = 1000
-    onsite_max_emails_per_day: int = 100
+    onsite_max_emails_per_day: int = 250
 
     # -- Remote Settings ----------------------------------------------------
     remote_search_terms: CsvList = Field(default_factory=list)
@@ -122,7 +122,7 @@ class Settings(BaseSettings):
     remote_job_boards: CsvList = Field(default_factory=list)
     remote_country_indeed: str = "USA"
     remote_results_wanted: int = 1000
-    remote_max_emails_per_day: int = 80
+    remote_max_emails_per_day: int = 250
 
     # -- CSV field parsing --------------------------------------------------
     @field_validator(
