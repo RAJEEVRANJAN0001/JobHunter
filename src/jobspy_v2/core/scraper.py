@@ -141,6 +141,17 @@ def scrape_jobs(settings: Settings, mode: str) -> ScrapeResult:
     else:
         locations = [settings.remote_location]
 
+    logger.info(
+        "Scraper Config (%s): terms=%d, boards=%d, locations=%d",
+        mode,
+        len(search_terms),
+        len(boards),
+        len(locations),
+    )
+    logger.debug("Terms: %s", search_terms)
+    logger.debug("Boards: %s", boards)
+    logger.debug("Locations: %s", locations)
+
     base_params = _build_base_params(settings, mode)
 
     # ── Build all param combinations ───────────────────────────────────
