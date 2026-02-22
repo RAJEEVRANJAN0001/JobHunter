@@ -19,10 +19,15 @@ on:
           - "false"
           - "true"
 
+# Prevent concurrent runs from conflicting
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   onsite:
     runs-on: ubuntu-latest
-    timeout-minutes: 360
+    timeout-minutes: 480  # Increased to 8 hours for large scrapes
 
     steps:
       - uses: actions/checkout@v4
@@ -58,6 +63,8 @@ jobs:
         env:
           # --- General ---
           SKIP_WEEKENDS: ${{ secrets.SKIP_WEEKENDS }}
+          # --- Scrape workers ---
+          SCRAPE_MAX_WORKERS: 50
           # --- SMTP ---
           GMAIL_EMAIL: ${{ secrets.GMAIL_EMAIL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}

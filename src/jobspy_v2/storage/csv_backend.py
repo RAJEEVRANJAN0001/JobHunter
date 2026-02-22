@@ -84,7 +84,18 @@ class CsvBackend:
             with self._jobs_path.open("r", encoding="utf-8") as f:
                 return sum(1 for _ in f) + 1
 
+        # Add row_number to each record before saving (for carry-over tracking)
+        start_row = self._get_next_row_number()
+        for i, record in enumerate(records):
+            record["row_number"] = str(start_row + i)
+
         return _append_rows(self._jobs_path, SCRAPED_JOB_COLUMNS, records)
+
+    def _get_next_row_number(self) -> int:
+        """Get the next available row number (1-indexed, after header)."""
+        _ensure_csv(self._jobs_path, SCRAPED_JOB_COLUMNS)
+        with self._jobs_path.open("r", encoding="utf-8") as f:
+            return sum(1 for _ in f) + 1  # +1 for next row (after header = 1)
 
     def update_scraped_job_status(
         self,
@@ -123,6 +134,20 @@ class CsvBackend:
             writer.writeheader()
             writer.writerows(rows)
         logger.debug("Updated CSV row %d: email_sent=%s", row_number, email_sent)
+
+    def get_pending_jobs(self) -> list[dict[str, str]]:
+        """Return all jobs with email_sent='Pending' status.
+
+        Used for carry-over: jobs not processed due to daily limit in previous runs.
+        """
+        all_jobs = _read_csv(self._jobs_path, SCRAPED_JOB_COLUMNS)
+        pending = []
+        for i, job in enumerate(all_jobs):
+            if job.get("email_sent", "") == "Pending":
+                # Row number is index + 2 (index 0 = first data row = row 2 in file)
+                job["row_number"] = str(i + 2)
+                pending.append(job)
+        return pending
 
     def get_run_stats(self) -> list[dict[str, str]]:
         """Return all run statistics records."""

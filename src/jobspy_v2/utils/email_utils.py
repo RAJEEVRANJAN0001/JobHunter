@@ -8,17 +8,152 @@ from __future__ import annotations
 import re
 from collections.abc import Sequence
 
-# RFC-5322 simplified: local@domain.tld (2+ char TLD, no consecutive dots)
+# Strict email regex: rejects problematic patterns
+# - Local part: alphanumeric, dots, underscores, plus, hyphen (can't START with ._-)
+# - Domain can't start with hyphen or dot, no consecutive dots
+# - TLD must be 2+ chars
 EMAIL_REGEX: re.Pattern[str] = re.compile(
-    r"^[a-zA-Z0-9._%+-]+@(?!.*\.\.)[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$"
+    r"^(?!.*\.\.)"  # No consecutive dots anywhere
+    r"[a-zA-Z0-9]"  # Local part must start with alphanumeric
+    r"[a-zA-Z0-9._%+-]*"  # Can contain these
+    r"@[a-zA-Z0-9]"  # Domain must start with alphanumeric
+    r"[a-zA-Z0-9.-]*"  # Can contain these (but no consecutive dots handled by negative lookahead)
+    r"\.[a-zA-Z]{2,}$"  # TLD: 2+ chars
+)
+
+# Suspicious TLDs commonly used in spam/invalid emails
+SUSPICIOUS_TLDS: frozenset[str] = frozenset(
+    {
+        # Country codes with high spam
+        "to",
+        "tk",
+        "ml",
+        "ga",
+        "cf",
+        "gq",
+        "xyz",
+        "top",
+        "work",
+        "ru",
+        "cn",
+        "ua",
+        "kz",
+        "by",
+        "su",
+        "am",
+        "ge",
+        # Other suspicious
+        "zip",
+        "mov",
+        "icu",
+        "link",
+        "click",
+        "review",
+        "country",
+        "science",
+        "tk",
+        "ga",
+        "cf",
+        "gq",
+        "ml",
+        "ninja",
+        "science",
+    }
+)
+
+# Hardcoded email patterns that are ALWAYS filtered (typos, spam, etc.)
+HARDCODED_EMAIL_BLOCKLIST: list[re.Pattern[str]] = [
+    # accommodation - matches any email containing "ac...modation"
+    # (catches both "accommodation" and "accomodation" typos)
+    re.compile(r"ac.*modation", re.IGNORECASE),
+    # accessibility variations
+    re.compile(r"accessibility", re.IGNORECASE),
+]
+
+# Suspicious patterns in email (not valid company emails)
+SUSPICIOUS_EMAIL_PATTERNS: list[re.Pattern[str]] = [
+    # Patterns like vs00825391@... (employee IDs in email - 4+ digits after possible prefix)
+    re.compile(r"^[a-zA-Z]{0,2}\d{4,}@", re.IGNORECASE),
+    # Patterns like _name@ or -name@ (underscore/hyphen prefix at start)
+    re.compile(r"^[_+-]\w+@", re.IGNORECASE),
+]
+
+# Common invalid/generic emails to filter
+# Note: "jobs" is intentionally NOT included - many companies use jobs@company.com
+INVALID_EMAIL_PREFIXES: frozenset[str] = frozenset(
+    {
+        "info",
+        "admin",
+        "support",
+        "noreply",
+        "no-reply",
+        "donotreply",
+        "hr",
+        "careers",
+        "recruitment",
+        "recruiting",
+        "contact",
+        "hello",
+        "mail",
+        "webmaster",
+        "postmaster",
+        "office",
+        "team",
+    }
 )
 
 
 def validate_email(email: str) -> bool:
-    """Return True if *email* matches the simplified RFC-5322 pattern."""
+    """Return True if *email* is valid and not suspicious.
+
+    Checks:
+    - RFC-5322 pattern match
+    - No suspicious TLD
+    - No suspicious patterns (ID-like numbers, underscore prefix, etc.)
+    - Rejects known invalid formats
+    - Hardcoded blocklist (accommodation typos, etc.)
+    """
     if not email or not isinstance(email, str):
         return False
-    return EMAIL_REGEX.match(email.strip()) is not None
+
+    email = email.strip().lower()
+
+    # Basic pattern match
+    if EMAIL_REGEX.match(email) is None:
+        return False
+
+    # Check hardcoded blocklist first (before anything else)
+    for pattern in HARDCODED_EMAIL_BLOCKLIST:
+        if pattern.search(email):
+            return False
+
+    # Extract domain and TLD
+    try:
+        domain = email.split("@")[1]
+        tld = domain.rsplit(".", 1)[-1] if "." in domain else ""
+    except (IndexError, ValueError):
+        return False
+
+    # Check suspicious TLDs
+    if tld.lower() in SUSPICIOUS_TLDS:
+        return False
+
+    # Check suspicious patterns
+    for pattern in SUSPICIOUS_EMAIL_PATTERNS:
+        if pattern.search(email):
+            return False
+
+    # Check if local part starts with suspicious prefix (but allow valid company emails)
+    local_part = email.split("@")[0]
+    if local_part in INVALID_EMAIL_PREFIXES:
+        # Allow if domain has a dot (looks like a real company domain)
+        # Reject if domain is just a single word without dot
+        if "." in domain:
+            pass  # Allow (likely valid company email like hr@company.com)
+        else:
+            return False
+
+    return True
 
 
 def extract_emails(emails_str: str) -> list[str]:

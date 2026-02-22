@@ -81,7 +81,7 @@ class Settings(BaseSettings):
     skip_weekends: bool = False
     dry_run: bool = False
     log_level: str = "INFO"
-    scrape_max_workers: int = 30
+    scrape_max_workers: int = 50  # Increased for faster scraping
 
     # -- Email Settings -----------------------------------------------------
     min_email_words: int = 120
@@ -112,6 +112,7 @@ class Settings(BaseSettings):
     onsite_job_boards: CsvList = Field(default_factory=list)
     onsite_country_indeed: str = "India"
     onsite_results_wanted: int = 1000
+    onsite_hours_old: int = 48
     onsite_max_emails_per_day: int = 500
 
     # -- Remote Settings ----------------------------------------------------
@@ -122,6 +123,7 @@ class Settings(BaseSettings):
     remote_job_boards: CsvList = Field(default_factory=list)
     remote_country_indeed: str = "USA"
     remote_results_wanted: int = 1000
+    remote_hours_old: int = 48
     remote_max_emails_per_day: int = 250
 
     # -- CSV field parsing --------------------------------------------------

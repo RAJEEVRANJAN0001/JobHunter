@@ -54,6 +54,10 @@ def _build_base_params(settings: Settings, mode: str) -> dict:
         "verbose": 2,
     }
 
+    hours_old = getattr(settings, f"{prefix}_hours_old", None)
+    if hours_old:
+        params["hours_old"] = hours_old
+
     job_type = getattr(settings, f"{prefix}_job_type", None)
     if job_type:
         params["job_type"] = job_type

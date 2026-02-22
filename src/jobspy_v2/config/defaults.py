@@ -61,9 +61,24 @@ DEFAULT_EMAIL_FILTER_PATTERNS: tuple[str, ...] = (
     "starts_with:accommodation@",
     "contains:accessibility",
     "contains:accommodation",
+    "contains:accomodation",  # Common typo (accomodationrequest@)
     "contains:no-reply",
     "contains:noreply",
     "contains:do-not-reply",
+    # Suspicious TLDs - reject domains ending in these TLDs
+    "contains:.to",
+    "contains:.tk",
+    "contains:.ml",
+    "contains:.ga",
+    "contains:.cf",
+    "contains:.gq",
+    "contains:.xyz",
+    "contains:.top",
+    "contains:.work",
+    "contains:.ru",
+    "contains:.cn",
+    "contains:.ua",
+    "contains:.kz",
 )
 
 # ---------------------------------------------------------------------------

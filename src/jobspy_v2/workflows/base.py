@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, date
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -99,9 +99,32 @@ class BaseWorkflow:
             "filtered_title": 0,
             "filtered_email": 0,
             "boards_queried": [],
+            "pending_carried_over": 0,
         }
 
         try:
+            # ── Phase 0: Carry-over — process pending jobs from previous runs ──
+            max_emails = self._get_max_emails()
+            pending_jobs = self._get_pending_jobs()
+
+            if pending_jobs:
+                logger.info(
+                    "[%s] Found %d pending jobs from previous runs",
+                    self.mode,
+                    len(pending_jobs),
+                )
+                remaining_quota = self._process_pending_jobs(
+                    pending_jobs, max_emails, stats
+                )
+                # Use remaining quota for new jobs
+                max_emails = remaining_quota
+                logger.info(
+                    "[%s] Remaining email quota after carry-over: %d",
+                    self.mode,
+                    max_emails,
+                )
+
+            # ── Phase 1: Scrape + Save ────────────────────────────────
             result = scrape_jobs(self.settings, self.mode)
             stats["total_scraped"] = len(result.jobs)
             stats["boards_queried"] = result.boards_queried
@@ -110,17 +133,24 @@ class BaseWorkflow:
                 result.total_after_email_filter - result.total_after_title_filter
             )
 
-            if result.jobs.empty:
+            if result.jobs.empty and max_emails <= 0:
+                logger.info("[%s] No jobs found or no email quota left.", self.mode)
+                self._send_report(stats, start)
+                return 0
+            elif result.jobs.empty:
                 logger.info("[%s] No jobs found after filtering.", self.mode)
                 self._send_report(stats, start)
                 return 0
 
-            # ── Phase 1: Scrape + Save ────────────────────────────────
             start_row = self._save_scraped_jobs(result.jobs)
 
             # ── Phase 2: Process + Email + Update ─────────────────────
-            max_emails = self._get_max_emails()
-            self._process_jobs(result.jobs, start_row, max_emails, stats)
+            if max_emails > 0:
+                self._process_jobs(result.jobs, start_row, max_emails, stats)
+            else:
+                logger.info(
+                    "[%s] No email quota remaining, skipping new jobs.", self.mode
+                )
 
         except Exception:
             logger.exception("[%s] Fatal error in pipeline.", self.mode)
@@ -344,3 +374,157 @@ class BaseWorkflow:
             stats=stats,
             duration_seconds=duration,
         )
+
+    # ------------------------------------------------------------------
+    # Carry-over: Process pending jobs from previous runs
+    # ------------------------------------------------------------------
+
+    def _get_pending_jobs(self) -> list[dict[str, str]]:
+        """Get pending jobs from storage (carry-over from previous runs).
+
+        These are jobs that were scraped but couldn't be processed due to
+        daily email limit in previous runs.
+        """
+        try:
+            pending = self.storage.get_pending_jobs()
+            return pending
+        except Exception:
+            logger.exception("[%s] Failed to get pending jobs", self.mode)
+            return []
+
+    def _process_pending_jobs(
+        self,
+        pending_jobs: list[dict[str, str]],
+        max_emails: int,
+        stats: dict,
+    ) -> int:
+        """Process pending jobs from previous runs.
+
+        These jobs already exist in storage with status 'Pending'.
+        We process them first before new jobs to ensure carry-over works.
+
+        Returns the remaining email quota after processing.
+        """
+        if not pending_jobs or max_emails <= 0:
+            return max_emails
+
+        sent_count = 0
+
+        for job in pending_jobs:
+            if sent_count >= max_emails:
+                logger.info(
+                    "[%s] Carried-over: reached max emails (%d)",
+                    self.mode,
+                    max_emails,
+                )
+                break
+
+            # Get row_number from the job (added by storage backend)
+            try:
+                row_number = int(job.get("row_number", 0))
+            except (ValueError, TypeError):
+                row_number = 0
+
+            if row_number <= 0:
+                logger.warning(
+                    "[%s] Skipping pending job without row_number", self.mode
+                )
+                continue
+
+            title = job.get("title", "")
+            company = job.get("company", "")
+            job_url = job.get("job_url", "")
+            location = job.get("location", "")
+            is_remote = job.get("is_remote", "") == "True"
+            raw_emails = job.get("emails", "")
+
+            # Extract valid recipients
+            recipients = get_valid_recipients(
+                raw_emails, self.settings.email_filter_patterns
+            )
+            if not recipients:
+                self._update_row_status(
+                    row_number, "Skipped", "no_valid_recipients", ""
+                )
+                stats["skipped_no_recipients"] += 1
+                continue
+
+            stats["jobs_with_emails"] += 1
+            primary_email = recipients[0]
+            domain = primary_email.split("@")[1] if "@" in primary_email else ""
+
+            # Dedup check
+            can_send, reason = self.dedup.can_send(primary_email, domain, company)
+            if not can_send:
+                stat_key = _reason_to_stat_key(reason)
+                self._update_row_status(row_number, "Skipped", reason, primary_email)
+                stats[stat_key] += 1
+                continue
+
+            # Generate email
+            description = job.get("description", "")
+            email_result = generate_email(
+                job_title=title,
+                company=company,
+                job_description=description,
+                settings=self.settings,
+                context=self._context,
+            )
+
+            # Send or dry-run
+            if self.settings.dry_run:
+                logger.info(
+                    "[DRY RUN] Would send to %s — %s at %s",
+                    primary_email,
+                    title,
+                    company,
+                )
+                self._update_row_status(row_number, "DryRun", "", primary_email)
+            else:
+                success, error = send_email(
+                    to_email=primary_email,
+                    subject=email_result.subject,
+                    body=email_result.body,
+                    settings=self.settings,
+                    resume_path=self.settings.resume_file_path,
+                )
+                if not success:
+                    logger.error("Failed to send to %s: %s", primary_email, error)
+                    self._update_row_status(
+                        row_number, "Failed", f"smtp_error: {error}", primary_email
+                    )
+                    stats["emails_failed"] += 1
+                    continue
+
+                self._update_row_status(row_number, "Yes", "", primary_email)
+
+            # Record success
+            self.dedup.mark_sent(
+                email=primary_email,
+                domain=domain,
+                company=company,
+                job_title=title,
+                job_url=job_url,
+                location=location,
+                is_remote=is_remote,
+                subject=email_result.subject,
+                body_preview=email_result.body,
+                mode=email_result.mode,
+                word_count=email_result.word_count,
+            )
+            sent_count += 1
+            stats["emails_sent"] += 1
+            stats["pending_carried_over"] += 1
+
+            if sent_count < max_emails and not self.settings.dry_run:
+                time.sleep(self.settings.email_interval_seconds)
+
+        logger.info(
+            "[%s] Carried-over: processed %d pending jobs, sent %d",
+            self.mode,
+            len(pending_jobs),
+            sent_count,
+        )
+
+        # Return remaining quota
+        return max_emails - sent_count

@@ -43,6 +43,7 @@ SCRAPED_JOB_COLUMNS: tuple[str, ...] = (
     "email_sent",
     "skip_reason",
     "email_recipient",
+    "row_number",  # Track row number for carry-over processing
 )
 
 RUN_STATS_COLUMNS: tuple[str, ...] = (
@@ -91,6 +92,13 @@ class StorageBackend(Protocol):
         email_recipient: str,
     ) -> None:
         """Update email_sent, skip_reason, and email_recipient for a scraped job row."""
+        ...
+
+    def get_pending_jobs(self) -> list[dict[str, str]]:
+        """Return all jobs with email_sent='Pending' status.
+
+        Used for carry-over: jobs not processed due to daily limit in previous runs.
+        """
         ...
 
     def get_run_stats(self) -> list[dict[str, str]]:

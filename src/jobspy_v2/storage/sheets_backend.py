@@ -144,6 +144,10 @@ class SheetsBackend:
         if not records:
             return start_row
 
+        # Add row_number to each record for carry-over tracking
+        for i, record in enumerate(records):
+            record["row_number"] = str(start_row + i)
+
         rows = [self._record_to_row(r, SCRAPED_JOB_COLUMNS) for r in records]
         ws.append_rows(rows, value_input_option="USER_ENTERED")
         logger.info(
@@ -166,6 +170,35 @@ class SheetsBackend:
         logger.debug(
             "Updated scraped job row %d: email_sent=%s", row_number, email_sent
         )
+
+    def get_pending_jobs(self) -> list[dict[str, str]]:
+        """Return all jobs with email_sent='Pending' status.
+
+        Used for carry-over: jobs not processed due to daily limit in previous runs.
+        """
+        ws = self._get_ws("Scraped Jobs")
+        try:
+            all_values = ws.get_all_values()
+            if not all_values:
+                return []
+
+            # First row is headers
+            headers = [str(v) for v in all_values[0]]
+            pending = []
+
+            # Start from row 2 (first data row)
+            for row_idx, row in enumerate(all_values[1:], start=2):
+                row_dict = {
+                    headers[i]: str(row[i]) if i < len(row) else ""
+                    for i in range(len(headers))
+                }
+                if row_dict.get("email_sent", "") == "Pending":
+                    row_dict["row_number"] = str(row_idx)
+                    pending.append(row_dict)
+            return pending
+        except gspread.exceptions.GSpreadException:
+            logger.warning("Failed to read pending jobs, returning empty list")
+            return []
 
     def get_run_stats(self) -> list[dict[str, str]]:
         """Return all run statistics records from the sheet."""
