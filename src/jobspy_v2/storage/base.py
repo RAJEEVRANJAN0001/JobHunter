@@ -108,3 +108,7 @@ class StorageBackend(Protocol):
     def add_run_stats(self, stats: dict[str, str]) -> None:
         """Append a single run statistics record."""
         ...
+
+    def get_today_sent_emails_count(self) -> int:
+        """Return the count of emails sent today (both remote and onsite)."""
+        ...

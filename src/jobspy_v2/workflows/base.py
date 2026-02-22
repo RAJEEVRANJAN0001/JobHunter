@@ -103,26 +103,9 @@ class BaseWorkflow:
         }
 
         try:
-            # ── Phase 0: Carry-over — process pending jobs from previous runs ──
-            max_emails = self._get_max_emails()
+            # ── Phase 0: Get pending jobs count (for reporting) ───────────
             pending_jobs = self._get_pending_jobs()
-
-            if pending_jobs:
-                logger.info(
-                    "[%s] Found %d pending jobs from previous runs",
-                    self.mode,
-                    len(pending_jobs),
-                )
-                remaining_quota = self._process_pending_jobs(
-                    pending_jobs, max_emails, stats
-                )
-                # Use remaining quota for new jobs
-                max_emails = remaining_quota
-                logger.info(
-                    "[%s] Remaining email quota after carry-over: %d",
-                    self.mode,
-                    max_emails,
-                )
+            stats["pending_carried_over"] = len(pending_jobs)
 
             # ── Phase 1: Scrape + Save ────────────────────────────────
             result = scrape_jobs(self.settings, self.mode)
@@ -133,24 +116,27 @@ class BaseWorkflow:
                 result.total_after_email_filter - result.total_after_title_filter
             )
 
-            if result.jobs.empty and max_emails <= 0:
-                logger.info("[%s] No jobs found or no email quota left.", self.mode)
-                self._send_report(stats, start)
-                return 0
-            elif result.jobs.empty:
+            if result.jobs.empty:
                 logger.info("[%s] No jobs found after filtering.", self.mode)
+                if pending_jobs and not self.settings.dry_run:
+                    self._process_pending_after_new_jobs(pending_jobs, stats)
                 self._send_report(stats, start)
                 return 0
 
             start_row = self._save_scraped_jobs(result.jobs)
 
             # ── Phase 2: Process + Email + Update ─────────────────────
+            max_emails = self._get_max_emails()
             if max_emails > 0:
                 self._process_jobs(result.jobs, start_row, max_emails, stats)
             else:
                 logger.info(
                     "[%s] No email quota remaining, skipping new jobs.", self.mode
                 )
+
+            # ── Phase 3: Process pending jobs if under daily limit ─────
+            if pending_jobs and not self.settings.dry_run:
+                self._process_pending_after_new_jobs(pending_jobs, stats)
 
         except Exception:
             logger.exception("[%s] Fatal error in pipeline.", self.mode)
@@ -528,3 +514,43 @@ class BaseWorkflow:
 
         # Return remaining quota
         return max_emails - sent_count
+
+    # ------------------------------------------------------------------
+    # Process pending jobs AFTER new jobs (daily limit aware)
+    # ------------------------------------------------------------------
+
+    def _process_pending_after_new_jobs(
+        self,
+        pending_jobs: list[dict[str, str]],
+        stats: dict,
+    ) -> None:
+        """Process pending jobs only if total emails sent today is under limit.
+
+        This runs AFTER processing new scraped jobs. It checks the total emails
+        sent today (both remote and onsite) and only processes pending jobs
+        if we're under the daily limit.
+        """
+        if not pending_jobs:
+            return
+
+        total_daily_limit = self.settings.daily_total_emails_limit
+        today_sent = self.storage.get_today_sent_emails_count()
+
+        if today_sent >= total_daily_limit:
+            logger.info(
+                "[%s] Daily email limit reached (%d/%d). Skipping pending jobs.",
+                self.mode,
+                today_sent,
+                total_daily_limit,
+            )
+            return
+
+        remaining_quota = total_daily_limit - today_sent
+        logger.info(
+            "[%s] Processing pending jobs: %d sent today, %d remaining quota",
+            self.mode,
+            today_sent,
+            remaining_quota,
+        )
+
+        self._process_pending_jobs(pending_jobs, remaining_quota, stats)

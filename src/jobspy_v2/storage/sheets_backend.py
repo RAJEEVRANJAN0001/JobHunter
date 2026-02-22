@@ -5,6 +5,7 @@ from __future__ import annotations
 import base64
 import json
 import logging
+from datetime import date
 from typing import Any
 
 import gspread
@@ -216,3 +217,33 @@ class SheetsBackend:
         row = self._record_to_row(stats, RUN_STATS_COLUMNS)
         ws.append_row(row, value_input_option="USER_ENTERED")
         logger.info("Saved run stats for %s", stats.get("date", "?"))
+
+    def get_today_sent_emails_count(self) -> int:
+        """Return the count of emails sent today (both remote and onsite)."""
+        ws = self._get_ws("Sent Emails")
+        try:
+            all_values = ws.get_all_values()
+            if not all_values:
+                return 0
+
+            headers = [str(v) for v in all_values[0]]
+            date_sent_idx = None
+            for i, h in enumerate(headers):
+                if h == "date_sent":
+                    date_sent_idx = i
+                    break
+
+            if date_sent_idx is None:
+                return 0
+
+            today_str = date.today().isoformat()
+            count = 0
+            for row in all_values[1:]:
+                if date_sent_idx < len(row):
+                    date_sent = str(row[date_sent_idx])
+                    if date_sent and date_sent.startswith(today_str):
+                        count += 1
+            return count
+        except gspread.exceptions.GSpreadException:
+            logger.warning("Failed to read sent emails, returning 0")
+            return 0

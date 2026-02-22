@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import csv
 import logging
+from datetime import date
 from pathlib import Path
 
 from jobspy_v2.storage.base import (
@@ -157,3 +158,14 @@ class CsvBackend:
         """Append a single run statistics record."""
         _append_rows(self._stats_path, RUN_STATS_COLUMNS, [stats])
         logger.info("Saved run stats for %s", stats.get("date", "?"))
+
+    def get_today_sent_emails_count(self) -> int:
+        """Return the count of emails sent today (both remote and onsite)."""
+        all_emails = _read_csv(self._sent_path, SENT_EMAIL_COLUMNS)
+        today_str = date.today().isoformat()
+        count = 0
+        for record in all_emails:
+            date_sent = record.get("date_sent", "")
+            if date_sent and date_sent.startswith(today_str):
+                count += 1
+        return count

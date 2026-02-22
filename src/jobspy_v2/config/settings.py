@@ -115,6 +115,10 @@ class Settings(BaseSettings):
     onsite_hours_old: int = 48
     onsite_max_emails_per_day: int = 500
 
+    # -- Pending Jobs Processing ---------------------------------------------
+    # Max total emails (remote + onsite) per day before stopping pending jobs
+    daily_total_emails_limit: int = 500
+
     # -- Remote Settings ----------------------------------------------------
     remote_search_terms: CsvList = Field(default_factory=list)
     remote_location: str = "Remote"
