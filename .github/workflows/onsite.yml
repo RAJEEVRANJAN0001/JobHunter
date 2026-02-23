@@ -64,7 +64,7 @@ jobs:
           # --- General ---
           SKIP_WEEKENDS: ${{ secrets.SKIP_WEEKENDS }}
           # --- Scrape workers ---
-          SCRAPE_MAX_WORKERS: 50
+          SCRAPE_MAX_WORKERS: 200
           # --- SMTP ---
           GMAIL_EMAIL: ${{ secrets.GMAIL_EMAIL }}
           GMAIL_APP_PASSWORD: ${{ secrets.GMAIL_APP_PASSWORD }}
